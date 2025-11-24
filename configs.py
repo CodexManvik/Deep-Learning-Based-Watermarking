@@ -1,0 +1,22 @@
+IMAGE_SIZE = (256, 256, 1)
+WATERMARK_SIZE = (256,)
+
+EPOCHS = 50
+BATCH_SIZE = 10  # Reduced from 10 to 4 for 4GB VRAM
+LEARNING_RATE = 0.001
+#ATTACK_MAX_ID = 6
+
+IMAGE_LOSS_WEIGHT = 0.1
+WATERMARK_LOSS_WEIGHT = 10.0
+delta_scale = 0.5
+
+ATTACKS_DISABLED = True
+
+TRAIN_IMAGES = 20000 
+
+MODEL_OUTPUT_PATH = 'pure_wavelet/'
+TRAIN_IMAGES_PATH = 'train_images/'
+TEST_IMAGES_PATH = 'test_images/'
+
+ATTACK_MIN_ID = 0
+ATTACK_MAX_ID = 1    # ensures attack_layer = identity
