@@ -8,16 +8,11 @@ from data_loaders.watermark_data_loaders.watermark_data_loader import WatermarkD
 from data_loaders.attack_id_data_loader.attack_id_data_loader import AttackIdDataLoader
 from data_loaders.configs import PREFETCH
 
-
 class MergedDataLoader(BaseDataLoader):
     """
-    Clean, stable, repo-faithful dataloader:
-    - Images: finite dataset
-    - Watermarks: infinite random bit vectors
-    - Attack IDs: infinite random attack choices
-    - Perfect alignment: (input → output) watermark matches 1:1
-    - Supports Phase-1: attacks disabled
-    - Supports Phase-2: attacks enabled
+    Fixed Data Loader:
+    - Zips (Image, Watermark, Attack) FIRST to ensure synchronization.
+    - Prevents the 'Random Stream Fork' bug where input and target watermarks differed.
     """
 
     def __init__(
@@ -39,12 +34,12 @@ class MergedDataLoader(BaseDataLoader):
         self.max_images = max_images
         self.image_base_path = image_base_path
 
-        # 1) Finite clean image dataset (exactly like original repo)
+        # 1) Finite clean image dataset
         self.image_stream = ImageDataLoader(
             base_path=image_base_path,
             channels=image_channels,
             convert_type=image_convert_type,
-            max_images=None  # slicing happens below
+            max_images=None 
         ).get_data_loader()
 
         # 2) Infinite watermark generator
@@ -59,7 +54,6 @@ class MergedDataLoader(BaseDataLoader):
         ).get_data_loader()
 
     def _count_image_files(self) -> int:
-        """Counts files in directory just like original repo logic."""
         try:
             p = Path(self.image_base_path)
             return len([f for f in p.glob("*") if f.is_file()])
@@ -67,39 +61,31 @@ class MergedDataLoader(BaseDataLoader):
             return 0
 
     def get_data_loader(self):
-
         if self.max_images is None:
             guessed = self._count_image_files()
             if guessed <= 0:
                 raise ValueError(f"No images found at {self.image_base_path}")
             self.max_images = guessed
 
-        # finite image set
+        # Limit images to the finite set
         img_ds = self.image_stream.take(int(self.max_images))
 
-        # infinite watermark stream
-        wm_ds = self.watermark_stream
+        # Zip strictly ONCE: (Image, Watermark, AttackID)
+        # This locks the random watermark to the image for this step
+        combined_ds = tf.data.Dataset.zip((img_ds, self.watermark_stream, self.attack_stream))
 
-        # infinite attack stream
-        atk_ds = self.attack_stream
+        # Now map to the format Keras expects: ((Inputs), (Outputs))
+        # Inputs: [Image, Watermark, AttackID]
+        # Outputs: [OriginalImage (for MSE), Watermark (for Extract Loss)]
+        def format_batch(img, wm, atk):
+            inputs = (img, wm, atk)
+            targets = (img, wm) # <--- wm here is IDENTICAL to wm in inputs
+            return inputs, targets
 
-        # zip watermark ONCE so input and output use the same watermark
-        # (wm_in, wm_out) are the same tensor
-        wm_pair = wm_ds.map(lambda w: (w, w))
-
-        # extract only once, not twice
-        wm_in = wm_pair.map(lambda w_in, w_out: w_in)
-        wm_out = wm_pair.map(lambda w_in, w_out: w_out)
-
-        x_ds = tf.data.Dataset.zip((img_ds, wm_in, atk_ds))
-        y_ds = tf.data.Dataset.zip((img_ds, wm_out))
-
-
-        ds = tf.data.Dataset.zip((x_ds, y_ds))
+        ds = combined_ds.map(format_batch, num_parallel_calls=tf.data.AUTOTUNE)
 
         ds = ds.shuffle(buffer_size=2048, reshuffle_each_iteration=True)
         ds = ds.batch(self.batch_size)
         ds = ds.prefetch(self.prefetch)
 
         return ds
-
