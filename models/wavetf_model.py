@@ -15,6 +15,7 @@ from attacks.salt_pepper_attack import salt_pepper_function
 from attacks.stupid_attack import stupid_function
 from attacks.drop_out_attack import drop_out_function
 from attacks.jpeg_attack import jpeg_function
+from attacks.rotation_attack import rotation_function
 
 class WaveTFModel:
     """
@@ -130,7 +131,9 @@ class WaveTFModel:
                         1: lambda: safe_run(salt_pepper_function, image),
                         2: lambda: safe_run(gaussian_noise_function, image),
                         3: lambda: safe_run(jpeg_function, image),
-                        4: lambda: safe_run(drop_out_function, image)
+                        4: lambda: safe_run(drop_out_function, image),
+                        5: lambda: safe_run(rotation_function, image),
+                        6: lambda: safe_run(stupid_function, image)
                     },
                     default=lambda: image
                 )
@@ -176,13 +179,15 @@ class WaveTFModel:
 
         # 4. Attack (Robustness Layer)
         attacked_img = self.attack_layer(embedded_img, attack_id)
+        attacked_img = Lambda(lambda x: x, name="attacked_image")(attacked_img)
         
         # 5. Extract (From Attacked Image)
         extracted_band, _ = self.dwt_forward(attacked_img)
         extracted_wm = self.extract_cnn(extracted_band)
 
+        # In wavetf_model.py, change the return to:
         return Model(
             inputs=[img_in, wm_in, attack_id],
-            outputs=[embedded_img, extracted_wm],
+            outputs=[embedded_img, extracted_wm, attacked_img],  # Add attacked_img
             name="WaveTF_Robust_LL"
         )

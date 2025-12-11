@@ -16,6 +16,22 @@ from tensorflow.keras.callbacks import (
 
 import matplotlib.pyplot as plt
 
+# Fix WSL2 VRAM limit
+gpus = tf.config.experimental.list_physical_devices('GPU')
+if gpus:
+    try:
+        # Let TF grow memory dynamically (up to 3.5GB+)
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
+        print("✓ GPU memory growth enabled")
+    except RuntimeError as e:
+        print(f"⚠ GPU config error: {e}")
+
+# Verify
+print(f"Available GPUs: {len(gpus)}")
+if gpus:
+    print(f"GPU: {tf.config.experimental.get_device_details(gpus[0])}")
+
 class ImageLogger(tf.keras.callbacks.Callback):
     def __init__(self, val_dataset, save_dir, freq=1):
         super(ImageLogger, self).__init__()
@@ -77,7 +93,7 @@ train_dataset = MergedDataLoader(
     attack_min_id=ATTACK_MIN_ID,
     attack_max_id=ATTACK_MAX_ID,
     batch_size=BATCH_SIZE,
-    max_images=20000
+    max_images=TRAIN_IMAGES
 ).get_data_loader()
 
 # Model
@@ -99,21 +115,46 @@ if candidate:
     except Exception as e: print(e)
 
 # Callbacks
+# Callbacks
 timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
 visualizer = ImageLogger(train_dataset, MODEL_OUTPUT_PATH)
+
 callbacks = [
     visualizer,
+    
+    # BEST MODEL ONLY - monitors watermark loss (robustness)
     ModelCheckpoint(
         filepath=os.path.join(MODEL_OUTPUT_PATH, "best_weights.h5"),
         monitor="output_watermark_loss",
+        save_best_only=True,  # Only save when watermark loss improves
+        save_weights_only=True,
+        mode="min",
+        verbose=1
+    ),
+    
+    # BEST PSNR MODEL - monitors image quality
+    ModelCheckpoint(
+        filepath=os.path.join(MODEL_OUTPUT_PATH, "best_psnr.h5"),
+        monitor="embedded_image_loss",  # Lower = better PSNR
         save_best_only=True,
         save_weights_only=True,
         mode="min",
         verbose=1
     ),
-    ReduceLROnPlateau(monitor="output_watermark_loss", factor=0.5, patience=5, min_lr=1e-7, verbose=1),
+    
+    # Learning rate reduction when stuck
+    ReduceLROnPlateau(
+        monitor="output_watermark_loss",
+        factor=0.5,
+        patience=5,
+        min_lr=1e-7,
+        verbose=1
+    ),
+    
+    # TensorBoard logging
     TensorBoard(log_dir=os.path.join("logs", timestamp), update_freq="epoch")
 ]
+
 
 optimizer = tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE, clipnorm=1.0)
 
@@ -126,12 +167,23 @@ print(f" - Image Weight: {IMAGE_LOSS_WEIGHT} (Invisibility)")
 print(f" - Watermark Weight: {WATERMARK_LOSS_WEIGHT} (Robustness)")
 print(f" - Attacks: ENABLED (Learning to survive noise/compression)")
 
+# In trainer.py, update the compile section:
+
 model.compile(
     optimizer=optimizer,
-    loss={"embedded_image": "mse", "output_watermark": "mae"},
-    loss_weights={"embedded_image": IMAGE_LOSS_WEIGHT, "output_watermark": WATERMARK_LOSS_WEIGHT},
+    loss={
+        "embedded_image": "mse",      # Clean watermarked vs original
+        "output_watermark": "mae",     # Extracted vs target watermark
+        "attacked_image": "mse"        # Attacked vs original (optional, can set weight=0)
+    },
+    loss_weights={
+        "embedded_image": IMAGE_LOSS_WEIGHT,
+        "output_watermark": WATERMARK_LOSS_WEIGHT,
+        "attacked_image": 0.0  # Don't optimize attacked image directly
+    },
     metrics={"output_watermark": "binary_accuracy"}
 )
+
 
 try:
     model.fit(

@@ -81,14 +81,13 @@ This forces the network to learn **robust watermark features** that survive real
 
 A comparison of the **original vs watermarked** image shows **no perceptible difference**.
 
-> *<img width="1500" height="500" alt="epoch_60_sample" src="https://github.com/user-attachments/assets/62dcd498-d43a-4416-8591-371540266d07" />*
+> *(Add your screenshot at `screenshots/comparison.png`)*
 
 ### Δ (Residual) Difference Map
 
 The residual added to the LL band, amplified 50×, reveals a learned grid-like pattern designed for robustness.
 
-> *<img width="256" height="256" alt="sample_0_diff_x50" src="https://github.com/user-attachments/assets/18e92c9e-55d8-4214-af37-1061b0c99c28" />*
-
+> *(Add your screenshot at `screenshots/difference_map.png`)*
 
 ---
 
@@ -103,7 +102,6 @@ arXiv:2210.06179 (2022)
 ### Original Implementation
 
 GitHub Repository: *Convolutional Neural Network Based Image Watermarking*
-https://github.com/alirezatwk/Convolutional-Neural-Network-Based-Image-Watermarking-using-Discrete-Wavelet-Transform
 
 ---
 
