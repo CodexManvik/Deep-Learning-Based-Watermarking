@@ -104,19 +104,30 @@ class ImageLogger(tf.keras.callbacks.Callback):
 # DATASET & MODEL SETUP
 # ============================================
 
-# Medical-optimized dataset (60K chest X-rays)
-train_dataset = MergedDataLoader(
+# Load full dataset
+print(f"Loading {TRAIN_IMAGES} images with {VALIDATION_SPLIT*100:.0f}% validation split...")
+full_dataset = MergedDataLoader(
     image_base_path=TRAIN_IMAGES_PATH,
     image_channels=[0],
     image_convert_type=None,
     watermark_size=WATERMARK_SIZE,
     attack_min_id=ATTACK_MIN_ID,
     attack_max_id=ATTACK_MAX_ID,
-    batch_size=BATCH_SIZE,  # 24 (RTX 3050 optimized)
-    max_images=TRAIN_IMAGES  # 60K
+    batch_size=BATCH_SIZE,
+    max_images=TRAIN_IMAGES
 ).get_data_loader()
 
-print(f"✓ Dataset loaded: {TRAIN_IMAGES} images, batch_size={BATCH_SIZE}")
+# Split into train/validation
+train_size = int(TRAIN_IMAGES * (1 - VALIDATION_SPLIT))
+val_size = TRAIN_IMAGES - train_size
+train_batches = train_size // BATCH_SIZE
+val_batches = val_size // BATCH_SIZE
+
+train_dataset = full_dataset.take(train_batches)
+val_dataset = full_dataset.skip(train_batches).take(val_batches)
+
+print(f"✓ Train: {train_size} images ({train_batches} batches)")
+print(f"✓ Validation: {val_size} images ({val_batches} batches)")
 
 # Model (Robust LL Strategy)
 print("Building Medical-Optimized Model (LL Band)...")
@@ -191,7 +202,9 @@ if VISUALIZE_MODEL_ARCHITECTURE and VISUALKERAS_AVAILABLE:
 # CALLBACKS (Auto-save Best Models)
 # ============================================
 
-visualizer = ImageLogger(train_dataset, MODEL_OUTPUT_PATH, freq=5)
+# Use proper validation dataset for visualization
+visualizer = ImageLogger(val_dataset, MODEL_OUTPUT_PATH, freq=5)
+
 
 callbacks = [
     # BEST ROBUSTNESS (Primary - watermark extraction)
@@ -284,6 +297,7 @@ try:
     
     history = model.fit(
         train_dataset,
+        validation_data=val_dataset,
         initial_epoch=0,
         epochs=EPOCHS,
         callbacks=callbacks,
