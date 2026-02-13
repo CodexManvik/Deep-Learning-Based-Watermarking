@@ -22,6 +22,14 @@ from tensorflow.keras.callbacks import (
     TensorBoard
 )
 
+# Visualization imports
+try:
+    import visualkeras
+    VISUALKERAS_AVAILABLE = True
+except ImportError:
+    VISUALKERAS_AVAILABLE = False
+    print("⚠ visualkeras not available - model architecture visualization disabled")
+
 # ============================================
 # PERFORMANCE BOOSTS (30% SPEEDUP)
 # ============================================
@@ -29,9 +37,10 @@ from tensorflow.keras.callbacks import (
 # 1. XLA Compilation (10-20% speedup)
 os.environ['TF_XLA_FLAGS'] = '--tf_xla_enable_xla_devices'
 
-# 2. Mixed Precision (halves VRAM, 20% faster)
-tf.keras.mixed_precision.set_global_policy('mixed_float16')
-print("✓ Mixed precision enabled (50% VRAM savings)")
+# 2. Mixed Precision - DISABLED due to WaveTF float64 kernel incompatibility
+# tf.keras.mixed_precision.set_global_policy('mixed_float16')
+# print("✓ Mixed precision enabled (50% VRAM savings)")
+print("⚠ Mixed precision disabled (WaveTF requires float32)")
 
 # 3. WSL2 VRAM Fix (1.7GB → 3.5GB+)
 gpus = tf.config.experimental.list_physical_devices('GPU')
@@ -139,9 +148,48 @@ else:
     print("🆕 Starting from scratch (no previous weights)")
 
 # ============================================
-# CALLBACKS (Auto-save Best Models)
+# Generate timestamp for this session
 # ============================================
 timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+
+# ============================================
+# MODEL ARCHITECTURE VISUALIZATION
+# ============================================
+if VISUALIZE_MODEL_ARCHITECTURE and VISUALKERAS_AVAILABLE:
+    try:
+        arch_path = os.path.join(VISUALIZATION_OUTPUT_PATH, f"model_architecture_{timestamp}.png")
+        os.makedirs(VISUALIZATION_OUTPUT_PATH, exist_ok=True)
+        
+        # Generate layered architecture diagram
+        visualkeras.layered_view(
+            model,
+            to_file=arch_path,
+            legend=True,
+            scale_xy=1,
+            scale_z=1,
+            max_z=400
+        )
+        print(f"✓ Model architecture saved: {arch_path}")
+        
+        # Also generate a graph view with layer details
+        from tensorflow.keras.utils import plot_model
+        graph_path = os.path.join(VISUALIZATION_OUTPUT_PATH, f"model_graph_{timestamp}.png")
+        plot_model(
+            model,
+            to_file=graph_path,
+            show_shapes=True,
+            show_layer_names=True,
+            rankdir='TB',
+            expand_nested=True,
+            dpi=150
+        )
+        print(f"✓ Model graph saved: {graph_path}")
+    except Exception as e:
+        print(f"⚠ Architecture visualization failed: {e}")
+
+# ============================================
+# CALLBACKS (Auto-save Best Models)
+# ============================================
 
 visualizer = ImageLogger(train_dataset, MODEL_OUTPUT_PATH, freq=5)
 
@@ -186,9 +234,16 @@ callbacks = [
     # VISUALIZATION
     visualizer,
     
-    # TENSORBOARD (Optional monitoring)
-    TensorBoard(log_dir=os.path.join("logs", f"medical_{timestamp}"), 
-                update_freq="epoch")
+    # TENSORBOARD (Enhanced monitoring with histograms and profiling)
+    TensorBoard(
+        log_dir=os.path.join("logs", f"medical_{timestamp}"),
+        histogram_freq=TENSORBOARD_HISTOGRAM_FREQ,
+        write_graph=True,
+        write_images=True,
+        update_freq="epoch",
+        profile_batch=TENSORBOARD_PROFILE_BATCH,
+        embeddings_freq=0
+    )
 ]
 
 # ============================================

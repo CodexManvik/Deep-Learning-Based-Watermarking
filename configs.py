@@ -4,7 +4,7 @@ IMAGE_SIZE = (256, 256, 1)
 WATERMARK_SIZE = (256,)
 
 # --- TRAINING HYPERPARAMETERS ---
-TRAIN_IMAGES = 60000
+TRAIN_IMAGES = 75000
 EPOCHS = 100
 BATCH_SIZE = 24
 LEARNING_RATE = 0.0005
@@ -27,8 +27,14 @@ ATTACK_MAX_ID = 6  # Changed from 7
 # Use paper-compliant weighted distribution (1/3 no-attack, 1/6 each for 4 attacks)
 USE_PAPER_ATTACK_DISTRIBUTION = True
 
+# --- VISUALIZATION ---
+VISUALIZE_MODEL_ARCHITECTURE = True
+VISUALIZATION_OUTPUT_PATH = 'visualizations/'
+TENSORBOARD_HISTOGRAM_FREQ = 1  # Log weight distributions every epoch
+TENSORBOARD_PROFILE_BATCH = (10, 20)  # Profile batches 10-20 for performance analysis
+
 # --- PATHS ---
-MODEL_OUTPUT_PATH = 'pure_wavelet_medical/'
-TRAIN_IMAGES_PATH = 'train_images_mixed/'
+MODEL_OUTPUT_PATH = 'pure_wavelet/'
+TRAIN_IMAGES_PATH = 'train_images/'
 TEST_IMAGES_PATH = 'test_images/'
 MAX_TEST_IMAGES = 2500

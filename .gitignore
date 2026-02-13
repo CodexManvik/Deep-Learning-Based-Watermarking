@@ -12,3 +12,5 @@ init_train
 logs
 venv_tf
 watermarked_output
+50k training high psnr model
+50k training high robustness model
