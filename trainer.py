@@ -126,8 +126,21 @@ val_batches = val_size // BATCH_SIZE
 train_dataset = full_dataset.take(train_batches)
 val_dataset = full_dataset.skip(train_batches).take(val_batches)
 
-print(f"✓ Train: {train_size} images ({train_batches} batches)")
-print(f"✓ Validation: {val_size} images ({val_batches} batches)")
+# CRITICAL: Cache to freeze the split and prevent data leakage
+# Without caching, MergedDataLoader's reshuffle_each_iteration=True causes
+# different samples in train/val every epoch
+train_dataset = train_dataset.cache()
+val_dataset = val_dataset.cache()
+
+# Shuffle only training data (validation should remain consistent)
+train_dataset = train_dataset.shuffle(buffer_size=2048, reshuffle_each_iteration=True)
+
+# Repeat datasets for multiple epochs
+train_dataset = train_dataset.repeat()
+val_dataset = val_dataset.repeat()
+
+print(f"✓ Train: {train_size} images ({train_batches} batches) - cached & shuffled")
+print(f"✓ Validation: {val_size} images ({val_batches} batches) - cached & frozen")
 
 # Model (Robust LL Strategy)
 print("Building Medical-Optimized Model (LL Band)...")
@@ -298,6 +311,8 @@ try:
     history = model.fit(
         train_dataset,
         validation_data=val_dataset,
+        steps_per_epoch=train_batches,
+        validation_steps=val_batches,
         initial_epoch=0,
         epochs=EPOCHS,
         callbacks=callbacks,
