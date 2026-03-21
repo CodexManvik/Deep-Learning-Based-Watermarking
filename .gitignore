@@ -1,0 +1,8 @@
+__pycache__
+logs/
+test_images/
+train_images/
+visualizations/epoch_diffs/
+venv_watermark/
+license
+LICENSE
