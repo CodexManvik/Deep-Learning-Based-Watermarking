@@ -6,3 +6,4 @@ visualizations/epoch_diffs/
 venv_watermark/
 license
 LICENSE
+.vscode
