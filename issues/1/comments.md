@@ -1,1 +1,0 @@
-I have worked on this issue and I'm currently making another model that addresses the issues in the current repo.
